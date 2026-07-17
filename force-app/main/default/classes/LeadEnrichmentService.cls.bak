@@ -1,0 +1,70 @@
+public with sharing class LeadEnrichmentService implements Queueable, Database.AllowsCallouts {
+    // Removed inner classes - using standalone ExternalCompanyResponse
+    private Id leadId;
+
+    // Constructor to pass the Lead ID asynchronously
+    public LeadEnrichmentService(Id leadId) {
+        this.leadId = leadId;
+    }
+
+    // The mandatory execution context for Queueable apex
+    public void execute(QueueableContext context) {
+        enrichLead(this.leadId);
+    }
+
+    public static void enrichLead(Id leadId) {
+        // 1. Query the record
+        Lead ld = [
+            SELECT Id, Website, Company,
+                   Logo_URL__c,
+                   NumberOfEmployees,
+                   Foundation_Date__c,
+                   Address,
+                   Biography__c,
+                   Enrichment_Status__c
+            FROM Lead
+            WHERE Id = :leadId
+            LIMIT 1
+        ];
+
+        // 2. Handle empty website validation
+        if (String.isBlank(ld.Website)) {
+            ld.Enrichment_Status__c = 'Failed';
+            update ld;
+            return;
+        }
+
+        // 3. Normalize and execute API Callout safely
+        String domain = normalizeWebsite(ld.Website);
+        HttpResponse res = ExternalCompanyApiClient.fetchCompanyByWebsite(domain);
+
+        // 4. Process HTTP responses 
+        if (res != null && res.getStatusCode() >= 200 && res.getStatusCode() < 300) {
+            ExternalCompanyResponse payload = ExternalCompanyParser.parse(res.getBody());
+
+            if (payload != null && payload.records != null && !payload.records.isEmpty()) {
+                LeadEnrichmentMapper.applyToLead(ld, payload.records[0]);
+            } else {
+                ld.Enrichment_Status__c = 'No Match';
+            }
+        } else {
+            ld.Enrichment_Status__c = 'Failed';
+        }
+
+        // 5. Final DML Update after callout logic is finalized
+        update ld;
+    }
+
+    private static String normalizeWebsite(String website) {
+        String cleaned = website.trim().toLowerCase();
+        cleaned = cleaned.replace('https://', '');
+        cleaned = cleaned.replace('http://', '');
+
+        Integer slashIndex = cleaned.indexOf('/');
+        if (slashIndex > -1) {
+            cleaned = cleaned.substring(0, slashIndex);
+        }
+
+        return cleaned;
+    }
+}
