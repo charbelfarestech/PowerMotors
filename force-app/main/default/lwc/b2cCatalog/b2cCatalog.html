@@ -1,0 +1,92 @@
+<template>
+    <lightning-card title="B2C Catalog" icon-name="standard:product">
+        <div class="hero">
+            <div>
+                <div class="eyebrow">Power Motors</div>
+                <h2>Browse, filter, preview, and select products</h2>
+                <p>Search the catalog, filter by category and country, inspect details.</p>
+            </div>
+        </div>
+
+        <div class="controls slds-p-around_medium">
+            <lightning-input type="search" label="Search products" value={searchKey} onchange={handleSearch}></lightning-input>
+            <lightning-combobox label="Category" value={selectedCategory} options={categoryOptions} onchange={handleCategoryChange}></lightning-combobox>
+            <lightning-combobox label="Country of Origin" value={selectedCountry} options={countryOptions} onchange={handleCountryChange}></lightning-combobox>
+            <lightning-input type="search" label="Opportunity Name" value={opportunityName} onchange={handleOppNameChange}></lightning-input>
+        </div>
+
+        <div class="layout">
+            <section class="catalog-panel">
+                <template if:true={hasProducts}>
+                    <div class="grid">
+                        <template for:each={products} for:item="product">
+                            <article key={product.pricebookEntryId} class={product.cardClass}>
+                                <div class="card-top">
+                                    <div>
+                                        <h3 class="name">{product.name}</h3>
+                                        <p class="price">{product.unitPrice}</p>
+                                    </div>
+                                    <lightning-button-icon icon-name="utility:info" variant="bare" alternative-text="View details" data-id={product.pricebookEntryId} onclick={openDetails}></lightning-button-icon>
+                                </div>
+                                <p class="muted">Serial: {product.serialNumber}</p>
+                                <p class="muted">Origin: {product.countryOfOrigin}</p>
+                                <p class="desc">{product.description}</p>
+                                <div class="meta">
+                                    <span>Life: {product.averageLifeExpectancy}</span>
+                                    <template if:true={product.generatorSize}><span>Size: {product.generatorSize}</span></template>
+                                    <template if:true={product.weight}><span>Weight: {product.weight}</span></template>
+                                    <template if:true={product.phase}><span>Phase: {product.phase}</span></template>
+                                    <template if:true={product.powerGeneratedKva}><span>KVA: {product.powerGeneratedKva}</span></template>
+                                    <template if:true={product.engineType}><span>Engine: {product.engineType}</span></template>
+                                </div>
+                                <div class="actions">
+                                    <lightning-input type="number" min="1" label="Qty" value={product.quantity} data-id={product.pricebookEntryId} onchange={handleQtyChange}></lightning-input>
+                                    <lightning-button label={product.buttonLabel} variant={product.buttonVariant} data-id={product.pricebookEntryId} onclick={toggleSelect}></lightning-button>
+                                </div>
+                            </article>
+                        </template>
+                    </div>
+                </template>
+                <template if:false={hasProducts}><div class="empty">No products found.</div></template>
+            </section>
+
+            <aside class="details-panel">
+                <template if:true={selectedProduct}>
+                    <div class="details-card">
+                        <div class="details-head">
+                            <h3>{selectedProduct.name}</h3>
+                            <p class="price">{selectedProduct.unitPrice}</p>
+                        </div>
+                        <p>{selectedProduct.description}</p>
+                        <ul>
+                            <li>Serial: {selectedProduct.serialNumber}</li>
+                            <li>Origin: {selectedProduct.countryOfOrigin}</li>
+                            <li>Life: {selectedProduct.averageLifeExpectancy}</li>
+                            <li>Size: {selectedProduct.generatorSize}</li>
+                            <li>Weight: {selectedProduct.weight}</li>
+                            <li>Phase: {selectedProduct.phase}</li>
+                            <li>KVA: {selectedProduct.powerGeneratedKva}</li>
+                            <li>Engine: {selectedProduct.engineType}</li>
+                        </ul>
+                    </div>
+                </template>
+                <template if:false={selectedProduct}>
+                    <div class="details-card subtle">Select a product to view details.</div>
+                </template>
+                <div class="summary-card">
+                    <h3>Selected Products</h3>
+                    <template if:true={selectedItems.length}>
+                        <template for:each={selectedItems} for:item="item">
+                            <div key={item.pricebookEntryId} class="summary-row">
+                                <span>{item.name}</span><span>{item.quantity} x {item.unitPrice}</span>
+                            </div>
+                        </template>
+                        <div class="summary-total">Total: {selectedTotal}</div>
+                        <lightning-button variant="brand" label="Create Won Opportunity" onclick={createOpportunity}></lightning-button>
+                    </template>
+                    <template if:false={selectedItems.length}><div class="subtle">No products selected.</div></template>
+                </div>
+            </aside>
+        </div>
+    </lightning-card>
+</template>
