@@ -1,73 +1,223 @@
-import { LightningElement, wire, api } from 'lwc';
+import { LightningElement, wire, api, track } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
-import getProducts from '@salesforce/apex/B2CCatalogController.getProducts';
-import getCategoryValues from '@salesforce/apex/B2CCatalogController.getCategoryValues';
-import getOriginValues from '@salesforce/apex/B2CCatalogController.getOriginValues';
+import getProducts        from '@salesforce/apex/B2CCatalogController.getProducts';
+import getOriginValues    from '@salesforce/apex/B2CCatalogController.getOriginValues';
+import getCategoryValues  from '@salesforce/apex/B2CCatalogController.getCategoryValues';
 import createWonOpportunity from '@salesforce/apex/B2CCatalogController.createWonOpportunity';
 
-export default class b2cCatalog extends LightningElement {
+const PAGE_SIZE = 5;
+const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+const fmt = v => (v != null ? USD.format(v) : '—');
+
+// True when the Product2 RecordType DeveloperName indicates a Generator
+const isGenRT = rt => rt && rt.toLowerCase().includes('generator');
+
+export default class B2cCatalog extends LightningElement {
     @api recordId;
-    searchKey = '';
+
     selectedCategory = '';
-    selectedCountry = '';
-    opportunityName = '';
-    products = [];
-    categoryOptions = [];
-    countryOptions = [];
-    selectedProduct = null;
-    selectedItems = [];
+    selectedCountry  = '';
+    opportunityName  = '';
+    currentPage      = 1;
+    countryOptions   = [];
+    categoryOptions  = [];  // [{ label, value, btnClass }]
     error;
 
-    @wire(getCategoryValues) wiredCategories({ data }) {
-        if (data) this.categoryOptions = [{ label: 'All', value: '' }, ...data.map(v => ({ label: v, value: v }))];
-    }
-    @wire(getOriginValues) wiredOrigins({ data }) {
-        if (data) this.countryOptions = [{ label: 'All', value: '' }, ...data.map(v => ({ label: v, value: v }))];
-    }
-    @wire(getProducts, { searchKey: '$searchKey', categoryFilter: '$selectedCategory', countryFilter: '$selectedCountry' })
-    wiredProducts({ data, error }) {
+    // source records — never mutated after wire
+    _allProducts = [];
+    // per-row UI state keyed by pricebookEntryId: { expanded, selected }
+    // @track so nested mutations trigger re-render
+    @track _rowState = {};
+
+    // ── wire: country picklist ──────────────────────────────────────────────
+    @wire(getOriginValues)
+    wiredOrigins({ data }) {
         if (data) {
-            this.products = data.map(p => ({ ...p, quantity: 1, selected: false, buttonLabel: 'Select', buttonVariant: 'neutral', cardClass: 'card' }));
-            this.error = undefined;
-            if (!this.selectedProduct && this.products.length) this.selectedProduct = this.products[0];
-        } else if (error) {
-            this.error = error;
-            this.products = [];
+            this.countryOptions = [
+                { label: 'All', value: '' },
+                ...data.map(v => ({ label: v, value: v }))
+            ];
         }
     }
-    handleSearch(e) { this.searchKey = e.target.value; }
-    handleCategoryChange(e) { this.selectedCategory = e.detail.value; }
-    handleCountryChange(e) { this.selectedCountry = e.detail.value; }
+
+    // ── wire: category picklist (drives filter pills dynamically) ───────────
+    @wire(getCategoryValues)
+    wiredCategories({ data }) {
+        if (data) {
+            this._buildCategoryOptions(data);
+        }
+    }
+
+    // developerName → human label: 'Generator_Product' → 'Generator Product'
+    _rtLabel(devName) {
+        return devName.replace(/_/g, ' ');
+    }
+
+    _buildCategoryOptions(devNames) {
+        const all = [{ label: 'All', value: '', btnClass: this._pillClass('') }];
+        const options = devNames.map(n => ({
+            label: this._rtLabel(n),
+            value: n,
+            btnClass: this._pillClass(n)
+        }));
+        this.categoryOptions = [...all, ...options];
+    }
+
+    _pillClass(val) {
+        return 'pill' + (this.selectedCategory === val ? ' pill-active' : '');
+    }
+
+    _refreshCategoryOptions() {
+        this.categoryOptions = this.categoryOptions.map(o => ({
+            ...o,
+            btnClass: this._pillClass(o.value)
+        }));
+    }
+
+    // ── wire: products ──────────────────────────────────────────────────────
+    @wire(getProducts, {
+        searchKey:      '',
+        categoryFilter: '$selectedCategory',
+        countryFilter:  '$selectedCountry'
+    })
+    wiredProducts({ data, error }) {
+        if (data) {
+            this._allProducts = data;
+            this.error = undefined;
+            this.currentPage = 1;
+        } else if (error) {
+            this.error = error;
+            this._allProducts = [];
+        }
+    }
+
+    // ── pagination ──────────────────────────────────────────────────────────
+    get totalPages()  { return Math.max(1, Math.ceil(this._allProducts.length / PAGE_SIZE)); }
+    get isFirstPage() { return this.currentPage <= 1; }
+    get isLastPage()  { return this.currentPage >= this.totalPages; }
+    get hasProducts() { return this._allProducts.length > 0; }
+
+    prevPage() { if (!this.isFirstPage) this.currentPage -= 1; }
+    nextPage() { if (!this.isLastPage)  this.currentPage += 1; }
+
+    // ── decorated page slice ────────────────────────────────────────────────
+    get pagedProducts() {
+        const start = (this.currentPage - 1) * PAGE_SIZE;
+        return this._allProducts
+            .slice(start, start + PAGE_SIZE)
+            .map(p => {
+                const st       = this._rowState[p.pricebookEntryId] || {};
+                const expanded = !!st.expanded;
+                const selected = !!st.selected;
+                const isGen    = isGenRT(p.recordTypeName);
+                return {
+                    ...p,
+                    isGenerator:    isGen,
+                    isPart:         !isGen,
+                    detailKey:      p.pricebookEntryId + '_d',
+                    rowClass:       'trow' + (selected ? ' trow-selected' : ''),
+                    detailRowClass: 'detail-tr' + (expanded ? ' detail-tr-open' : ''),
+                    nameBtnClass:   'name-btn' + (expanded ? ' name-btn-open' : ''),
+                    chevron:        expanded ? '▼' : '▶',
+                    badgeClass:     'badge ' + (isGen ? 'badge-gen' : 'badge-part'),
+                    selectBtnClass: 'sel-btn' + (selected ? ' sel-btn-active' : ''),
+                    buttonLabel:    selected ? 'Selected ✓' : 'Select',
+                    formattedPrice: fmt(p.unitPrice),
+                    avgLife:        p.averageLifeExpectancy != null ? p.averageLifeExpectancy + ' yrs' : '—',
+                    weightKg:       p.weight != null ? p.weight + ' kg' : '—',
+                    kva:            p.powerGeneratedKva != null ? p.powerGeneratedKva + ' KVA' : '—'
+                };
+            });
+    }
+
+    // ── event handlers ──────────────────────────────────────────────────────
+    handleCategoryChange(e) {
+        this.selectedCategory = e.currentTarget.dataset.val;
+        this.currentPage = 1;
+        this._refreshCategoryOptions();
+    }
+
+    handleCountryChange(e) {
+        this.selectedCountry = e.detail.value;
+        this.currentPage = 1;
+    }
+
     handleOppNameChange(e) { this.opportunityName = e.target.value; }
-    handleQtyChange(e) {
-        const id = e.target.dataset.id;
-        const qty = parseInt(e.target.value, 10) || 1;
-        this.products = this.products.map(p => p.pricebookEntryId === id ? { ...p, quantity: qty } : p);
-        this.selectedItems = this.selectedItems.map(i => i.pricebookEntryId === id ? { ...i, quantity: qty } : i);
-    }
-    toggleSelect(e) {
-        const id = e.target.dataset.id;
-        const product = this.products.find(p => p.pricebookEntryId === id);
-        if (!product) return;
-        const exists = this.selectedItems.some(i => i.pricebookEntryId === id);
-        if (exists) this.selectedItems = this.selectedItems.filter(i => i.pricebookEntryId !== id);
-        else this.selectedItems = [...this.selectedItems, { pricebookEntryId: id, unitPrice: product.unitPrice, quantity: product.quantity, name: product.name }];
-        this.products = this.products.map(p => p.pricebookEntryId === id ? { ...p, selected: !exists, buttonLabel: exists ? 'Select' : 'Selected', buttonVariant: exists ? 'neutral' : 'brand', cardClass: exists ? 'card' : 'card selected' } : p);
-    }
-    openDetails(e) {
+
+    // click product name → toggle detail row
+    toggleDetails(e) {
         const id = e.currentTarget.dataset.id;
-        this.selectedProduct = this.products.find(p => p.pricebookEntryId === id) || null;
+        const st = this._rowState[id] || {};
+        this._rowState = { ...this._rowState, [id]: { ...st, expanded: !st.expanded } };
     }
-    get hasProducts() { return this.products.length > 0; }
-    get selectedTotal() { return this.selectedItems.reduce((sum, i) => sum + (Number(i.unitPrice) * Number(i.quantity || 1)), 0); }
-    async createOpportunity() {
+
+    // click Select → toggle selection (qty always 1)
+    toggleSelect(e) {
+        const id = e.currentTarget.dataset.id;
+        const st = this._rowState[id] || {};
+        this._rowState = { ...this._rowState, [id]: { ...st, selected: !st.selected } };
+    }
+
+    // ── selected items (persists across page / filter changes) ─────────────
+    get selectedItems() {
+        // search ALL products (not just current page) for selections
+        return this._allProducts
+            .filter(p => this._rowState[p.pricebookEntryId]?.selected)
+            .map(p => ({ ...p, formattedPrice: fmt(p.unitPrice) }));
+    }
+    get hasSelectedItems() { return this.selectedItems.length > 0; }
+
+    get formattedTotal() {
+        return fmt(this.selectedItems.reduce((s, i) => s + (i.unitPrice || 0), 0));
+    }
+
+   async createOpportunity() {
+        if (!this.hasSelectedItems) {
+            this.dispatchEvent(new ShowToastEvent({
+                title: 'No items selected', message: 'Please select at least one product.', variant: 'warning'
+            }));
+            return;
+        }
         try {
-            const oppId = await createWonOpportunity({ accountId: this.recordId, opportunityName: this.opportunityName, items: this.selectedItems });
-            this.dispatchEvent(new ShowToastEvent({ title: 'Success', message: 'Won Opportunity created', variant: 'success' }));
-            this.selectedItems = [];
-            this.products = this.products.map(p => ({ ...p, selected: false, buttonLabel: 'Select', buttonVariant: 'neutral', cardClass: 'card' }));
-        } catch (e) {
-            this.dispatchEvent(new ShowToastEvent({ title: 'Error', message: e?.body?.message || 'Failed to create opportunity', variant: 'error' }));
+            // Fix: Clean, direct assignment without the problematic JSON serialization layer
+            const items = this.selectedItems.map(i => ({
+                pricebookEntryId: i.pricebookEntryId,
+                unitPrice:        i.unitPrice,
+                quantity:         1
+            }));
+
+            await createWonOpportunity({
+                accountId:       this.recordId,
+                opportunityName: this.opportunityName || 'B2C Sale',
+                items
+            });
+
+            this.dispatchEvent(new ShowToastEvent({
+                title: 'Success', message: 'Won Opportunity created successfully.', variant: 'success'
+            }));
+            
+            // reset selections and name
+            this._rowState = {};
+            this.opportunityName = '';
+        } catch (err) {
+            let msg = 'Failed to create opportunity.';
+            if (err) {
+                if (err.body) {
+                    if (err.body.message) {
+                        msg = err.body.message;
+                    } else if (err.body.pageErrors && err.body.pageErrors.length > 0) {
+                        msg = err.body.pageErrors[0].message;
+                    } else if (err.body.fieldErrors && Object.keys(err.body.fieldErrors).length > 0) {
+                        const firstField = Object.keys(err.body.fieldErrors)[0];
+                        msg = err.body.fieldErrors[firstField][0].message;
+                    }
+                } else if (err.message) {
+                    msg = err.message;
+                }
+            }
+            this.dispatchEvent(new ShowToastEvent({
+                title: 'Error', message: msg, variant: 'error'
+            }));
         }
     }
 }
