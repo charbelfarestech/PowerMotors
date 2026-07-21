@@ -76,8 +76,9 @@
                                 <tr key={p.detailKey} class={p.detailRowClass}>
                                     <td colspan="5" class="detail-td">
                                         <div class="detail-body">
+                                            <!-- Render dynamic product image or SVG fallback -->
                                             <div class="detail-img">
-                                                <lightning-icon icon-name="standard:product" size="large"></lightning-icon>
+                                                <img src={p.imageUrl} alt={p.name} class="product-thumb" />
                                             </div>
                                             <dl class="detail-fields">
 

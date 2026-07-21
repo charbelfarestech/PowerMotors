@@ -9,7 +9,9 @@ const PAGE_SIZE = 5;
 const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 const fmt = v => (v != null ? USD.format(v) : '—');
 
-// True when the Product2 RecordType DeveloperName indicates a Generator
+// Inline SVG Icon Data URI to render when DisplayUrl is null/blank
+const PLACEHOLDER_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='80' height='80' fill='%23919EAB'%3E%3Cpath d='M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-5.04-6.71l-2.75 3.54-1.96-2.36L6.5 17h11l-3.54-4.71zM11.5 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z'/%3E%3C/svg%3E";
+
 const isGenRT = rt => rt && rt.toLowerCase().includes('generator');
 
 export default class B2cCatalog extends LightningElement {
@@ -20,16 +22,12 @@ export default class B2cCatalog extends LightningElement {
     opportunityName  = '';
     currentPage      = 1;
     countryOptions   = [];
-    categoryOptions  = [];  // [{ label, value, btnClass }]
+    categoryOptions  = [];
     error;
 
-    // source records — never mutated after wire
     _allProducts = [];
-    // per-row UI state keyed by pricebookEntryId: { expanded, selected }
-    // @track so nested mutations trigger re-render
     @track _rowState = {};
 
-    // ── wire: country picklist ──────────────────────────────────────────────
     @wire(getOriginValues)
     wiredOrigins({ data }) {
         if (data) {
@@ -40,7 +38,6 @@ export default class B2cCatalog extends LightningElement {
         }
     }
 
-    // ── wire: category picklist (drives filter pills dynamically) ───────────
     @wire(getCategoryValues)
     wiredCategories({ data }) {
         if (data) {
@@ -48,7 +45,6 @@ export default class B2cCatalog extends LightningElement {
         }
     }
 
-    // developerName → human label: 'Generator_Product' → 'Generator Product'
     _rtLabel(devName) {
         return devName.replace(/_/g, ' ');
     }
@@ -74,7 +70,6 @@ export default class B2cCatalog extends LightningElement {
         }));
     }
 
-    // ── wire: products ──────────────────────────────────────────────────────
     @wire(getProducts, {
         searchKey:      '',
         categoryFilter: '$selectedCategory',
@@ -91,7 +86,6 @@ export default class B2cCatalog extends LightningElement {
         }
     }
 
-    // ── pagination ──────────────────────────────────────────────────────────
     get totalPages()  { return Math.max(1, Math.ceil(this._allProducts.length / PAGE_SIZE)); }
     get isFirstPage() { return this.currentPage <= 1; }
     get isLastPage()  { return this.currentPage >= this.totalPages; }
@@ -100,7 +94,6 @@ export default class B2cCatalog extends LightningElement {
     prevPage() { if (!this.isFirstPage) this.currentPage -= 1; }
     nextPage() { if (!this.isLastPage)  this.currentPage += 1; }
 
-    // ── decorated page slice ────────────────────────────────────────────────
     get pagedProducts() {
         const start = (this.currentPage - 1) * PAGE_SIZE;
         return this._allProducts
@@ -112,6 +105,8 @@ export default class B2cCatalog extends LightningElement {
                 const isGen    = isGenRT(p.recordTypeName);
                 return {
                     ...p,
+                    // Uses DisplayUrl value from Apex wrapper, or falls back to SVG
+                    imageUrl:       p.imageUrl ? p.imageUrl : PLACEHOLDER_ICON,
                     isGenerator:    isGen,
                     isPart:         !isGen,
                     detailKey:      p.pricebookEntryId + '_d',
@@ -130,7 +125,6 @@ export default class B2cCatalog extends LightningElement {
             });
     }
 
-    // ── event handlers ──────────────────────────────────────────────────────
     handleCategoryChange(e) {
         this.selectedCategory = e.currentTarget.dataset.val;
         this.currentPage = 1;
@@ -142,44 +136,46 @@ export default class B2cCatalog extends LightningElement {
         this.currentPage = 1;
     }
 
-    handleOppNameChange(e) { this.opportunityName = e.target.value; }
+    handleOppNameChange(e) { 
+        this.opportunityName = e.target.value; 
+    }
 
-    // click product name → toggle detail row
     toggleDetails(e) {
         const id = e.currentTarget.dataset.id;
         const st = this._rowState[id] || {};
         this._rowState = { ...this._rowState, [id]: { ...st, expanded: !st.expanded } };
     }
 
-    // click Select → toggle selection (qty always 1)
     toggleSelect(e) {
         const id = e.currentTarget.dataset.id;
         const st = this._rowState[id] || {};
         this._rowState = { ...this._rowState, [id]: { ...st, selected: !st.selected } };
     }
 
-    // ── selected items (persists across page / filter changes) ─────────────
     get selectedItems() {
-        // search ALL products (not just current page) for selections
         return this._allProducts
             .filter(p => this._rowState[p.pricebookEntryId]?.selected)
             .map(p => ({ ...p, formattedPrice: fmt(p.unitPrice) }));
     }
-    get hasSelectedItems() { return this.selectedItems.length > 0; }
+    
+    get hasSelectedItems() { 
+        return this.selectedItems.length > 0; 
+    }
 
     get formattedTotal() {
         return fmt(this.selectedItems.reduce((s, i) => s + (i.unitPrice || 0), 0));
     }
 
-   async createOpportunity() {
+    async createOpportunity() {
         if (!this.hasSelectedItems) {
             this.dispatchEvent(new ShowToastEvent({
-                title: 'No items selected', message: 'Please select at least one product.', variant: 'warning'
+                title: 'No items selected', 
+                message: 'Please select at least one product.', 
+                variant: 'warning'
             }));
             return;
         }
         try {
-            // Fix: Clean, direct assignment without the problematic JSON serialization layer
             const items = this.selectedItems.map(i => ({
                 pricebookEntryId: i.pricebookEntryId,
                 unitPrice:        i.unitPrice,
@@ -193,30 +189,24 @@ export default class B2cCatalog extends LightningElement {
             });
 
             this.dispatchEvent(new ShowToastEvent({
-                title: 'Success', message: 'Won Opportunity created successfully.', variant: 'success'
+                title: 'Success', 
+                message: 'Won Opportunity created successfully.', 
+                variant: 'success'
             }));
             
-            // reset selections and name
             this._rowState = {};
             this.opportunityName = '';
         } catch (err) {
             let msg = 'Failed to create opportunity.';
-            if (err) {
-                if (err.body) {
-                    if (err.body.message) {
-                        msg = err.body.message;
-                    } else if (err.body.pageErrors && err.body.pageErrors.length > 0) {
-                        msg = err.body.pageErrors[0].message;
-                    } else if (err.body.fieldErrors && Object.keys(err.body.fieldErrors).length > 0) {
-                        const firstField = Object.keys(err.body.fieldErrors)[0];
-                        msg = err.body.fieldErrors[firstField][0].message;
-                    }
-                } else if (err.message) {
-                    msg = err.message;
-                }
+            if (err?.body?.message) {
+                msg = err.body.message;
+            } else if (err?.message) {
+                msg = err.message;
             }
             this.dispatchEvent(new ShowToastEvent({
-                title: 'Error', message: msg, variant: 'error'
+                title: 'Error', 
+                message: msg, 
+                variant: 'error'
             }));
         }
     }
