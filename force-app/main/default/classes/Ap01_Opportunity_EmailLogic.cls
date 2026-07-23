@@ -8,6 +8,7 @@
  * @Last Modified By: Charbel Fares
  * @Test Class: Ap01_Opportunity_EmailLogic_Test
  */
+/** Detects Closed Won transitions and emails the owner a rendered PDF summary. */
 public class Ap01_Opportunity_EmailLogic {
 
     // called from the handler - filters who just closed won then fires the future method
@@ -31,6 +32,7 @@ public class Ap01_Opportunity_EmailLogic {
     // we can't generate a PDF directly inside a trigger, salesforce just doesn't allow it
     // so we use @future to run this part separately after the trigger is done
     // also @future only accepts simple values like Ids, not full records, so we re-query inside here
+    // Visualforce PDF rendering is asynchronous and treated as a callout by Salesforce.
     @future(callout=true)
     public static void sendClosedWonEmail(List<Id> closedOppIds) {
 
@@ -41,6 +43,7 @@ public class Ap01_Opportunity_EmailLogic {
         for (Opportunity opp : [SELECT Id, Name, OwnerId, Owner.Name FROM Opportunity WHERE Id IN :closedOppIds]) {
 
             // point to our pdf page and tell it which opportunity to load by passing the id
+            // Pass the current record to the page controller through its URL parameter.
             PageReference pdfPage = Page.OpportunityClosedWonPDF;
             pdfPage.getParameters().put('id', opp.Id);
 

@@ -1,6 +1,8 @@
+/** Performs the asynchronous external-company lookup and writes the Lead result. */
 public with sharing class LeadEnrichmentService {
     @future(callout=true)
     public static void enrichLead(Id leadId) {
+        // Future methods receive IDs only, so load all fields needed for mapping in this transaction.
         Lead ld = [
             SELECT Id, Website, Company,
                    Logo_URL__c,
@@ -30,6 +32,7 @@ public with sharing class LeadEnrichmentService {
         }
 
         try {
+            // The external REST query searches by host name rather than a full URL.
             String domain = normalizeWebsite(ld.Website);
             System.debug('Normalized domain: ' + domain);
 
@@ -49,6 +52,7 @@ public with sharing class LeadEnrichmentService {
 
                 if (payload != null && payload.records != null && !payload.records.isEmpty()) {
                     System.debug('Found matching record, applying mapper');
+                    // Keep API-to-Lead field conversions in a dedicated mapper.
                     LeadEnrichmentMapper.applyToLead(ld, payload.records[0]);
                 } else {
                     System.debug('No company found in response');
@@ -59,6 +63,7 @@ public with sharing class LeadEnrichmentService {
                 ld.Enrichment_Status__c = 'Failed';
             }
 
+            // Persist the mapping or its final status once per Lead.
             update ld;
             System.debug('Lead update finished');
         } catch (Exception e) {

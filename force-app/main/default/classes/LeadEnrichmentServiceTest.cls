@@ -1,4 +1,5 @@
         @IsTest
+/** Covers successful enrichment and the blank-website failure path. */
 private class LeadEnrichmentServiceTest {
     @IsTest
     static void testEnrichLeadSuccess() {

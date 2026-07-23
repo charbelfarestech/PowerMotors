@@ -1,3 +1,4 @@
+/** Maps the first matching external Account response to a Salesforce Lead. */
 public with sharing class LeadEnrichmentMapper {
     public static void applyToLead(Lead ld, ExternalCompanyResponse.AccountRecord src) {
         // Mapping the exact API variables
@@ -8,6 +9,7 @@ public with sharing class LeadEnrichmentMapper {
         ld.Foundation_Date__c = src.Foundation_date;
         ld.Description = src.Description;
 
+        // Address data is optional in the response; do not dereference or overwrite it when absent.
         if (src.BillingAddress != null) {
             ld.Street = src.BillingAddress.street;
             ld.City = src.BillingAddress.city;

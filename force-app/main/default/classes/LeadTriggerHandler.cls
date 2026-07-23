@@ -1,59 +1,49 @@
-public with sharing class LeadTriggerHandler  extends TriggerHandler implements ITriggerHandler{
+/** Dispatches Lead events to the appropriate enrichment use case. */
+public with sharing class LeadTriggerHandler extends TriggerHandler implements ITriggerHandler {
     
     private Map<Id, Lead> newMap;
     private Map<Id, Lead> oldMap;
-    private List<Lead> TriggerNew;
-    private List<Lead> TriggerOld;
+    private List<Lead> triggerNew;
+    private List<Lead> triggerOld;
     
-    public LeadTriggerHandler(){
+    public LeadTriggerHandler() {
         this.newMap = (Map<Id, Lead>) Trigger.newMap;
         this.oldMap = (Map<Id, Lead>) Trigger.oldMap;
-        this.TriggerNew= (List<Lead>) Trigger.New;
-        this.TriggerOld= (List<Lead>) Trigger.Old;
+        this.triggerNew = (List<Lead>) Trigger.new;
+        this.triggerOld = (List<Lead>) Trigger.old;
     }
     
+    // Disable trigger flag
+    public static Boolean triggerDisabled = false;
     
-    //Use this variable to disable this trigger from transaction
-    public static Boolean TriggerDisabled = false;
-    
-    //check if the trigger is disabled from transaction
-    public Boolean isDisabled(){
-        return TriggerDisabled;
+    public Boolean isDisabled() {
+        return triggerDisabled;
     }
-    
-    public override void beforeInsert() {
-    }
+
+    public override void beforeInsert() {}
     
     public override void afterInsert() {
-
-        /*
-        Ensures that the AP01_Lead.getLeads() method is only called during synchronous context, 
-        which means that it is not called when the trigger is executed in a batch or future context. 
-        This is to avoid any unexpected behavior that may occur if the method is called during an asynchronous context, 
-        as the logic in the method is designed to work in a synchronous manner.
-        */
-        
-        if(System.IsBatch() == false && System.isFuture() == false){ 
-            AP01_Lead.getLeads(oldMap, TriggerNew);
+        // Avoid starting a future callout from code that is already asynchronous.
+        if (!System.isBatch() && !System.isFuture()) {
+            AP01_Lead.enrichLeadsOnInsert(this.triggerNew);
         }
-
     }
     
-    public  override void beforeUpdate() {
+    public override void beforeUpdate() {
+        // Before-update changes are saved without a second DML operation.
+        AP01_Lead.clearLeadFieldsOnWebsiteRemoval(this.triggerNew, this.oldMap);
     }
     
     public override void afterUpdate() {
-        
-        if(System.IsBatch() == false && System.isFuture() == false){ 
-            AP01_Lead.getLeads(oldMap, TriggerNew);
+        // The old map is needed to determine whether Website was actually changed.
+        if (!System.isBatch() && !System.isFuture()) {
+            AP01_Lead.enrichLeadsOnUpdate(this.triggerNew, this.oldMap);
         }
-      
     }
     
     public override void beforeDelete() {}
     
     public override void afterDelete() {}
     
-    public override void afterUnDelete() {}
-
+    public override void afterUndelete() {}
 }

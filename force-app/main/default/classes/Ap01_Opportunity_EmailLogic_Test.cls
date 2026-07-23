@@ -8,6 +8,7 @@
  */
 
 @isTest
+/** Exercises the Opportunity trigger's Closed Won and non-Closed-Won paths. */
 public class Ap01_Opportunity_EmailLogic_Test {
 
     @testSetup

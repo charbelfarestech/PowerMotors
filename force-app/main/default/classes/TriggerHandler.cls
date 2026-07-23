@@ -1,4 +1,5 @@
 /*https://github.com/kevinohara80/sfdc-trigger-framework*/
+/** Shared framework that validates trigger execution and dispatches one context-specific hook. */
 public virtual class TriggerHandler {
     
     // static map of handlername, times run() was invoked
@@ -29,6 +30,7 @@ public virtual class TriggerHandler {
 ***************************************/
     
     // main method that will be called during execution
+    // Called from a thin trigger to select the correct before/after method.
     public void run() {
         
         if(!validateRun()) {

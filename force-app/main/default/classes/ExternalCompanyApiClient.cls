@@ -1,6 +1,8 @@
+/** REST client for the external company database configured through a named credential. */
 public with sharing class ExternalCompanyApiClient {
 
     public static Map<String, Object> getAccessToken() {
+        // The named credential supplies the endpoint; external credential placeholders resolve secrets.
         HttpRequest req = new HttpRequest();
         req.setMethod('POST');
         // set header as custom label 
@@ -26,6 +28,7 @@ public with sharing class ExternalCompanyApiClient {
         String accessToken = (String) tokenResponse.get('access_token');
         String instanceUrl = (String) tokenResponse.get('instance_url');
 
+        // The remote system is Salesforce, so its REST query endpoint accepts SOQL.
         String soql =
             'SELECT logoUrl__c, NumberOfEmployees, Foundation_date__c, BillingAddress, Description ' +
             'FROM Account ' +

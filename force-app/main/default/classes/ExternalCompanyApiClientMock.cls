@@ -1,4 +1,5 @@
 @IsTest
+/** Deterministic HTTP response used in enrichment tests instead of a real callout. */
 global class ExternalCompanyApiClientMock implements HttpCalloutMock {
     global HttpResponse respond(HttpRequest req) {
         HttpResponse res = new HttpResponse();

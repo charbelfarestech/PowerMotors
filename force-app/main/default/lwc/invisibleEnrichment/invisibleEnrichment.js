@@ -3,10 +3,12 @@ import { getRecord, getFieldValue, notifyRecordUpdateAvailable } from 'lightning
 import LEAD_WEBSITE from '@salesforce/schema/Lead.Website';
 import enrichAndSaveAccount from '@salesforce/apex/CompanyEnrichmentController.enrichAndSaveAccount';
 
+/** Headless Lead-page worker that periodically refreshes external company data. */
 export default class InvisibleEnrichment extends LightningElement {
     @api recordId;
     _refreshInterval;
 
+    // The reactive wire starts synchronization once the current Lead Website is available.
     @wire(getRecord, { recordId: '$recordId', fields: [LEAD_WEBSITE] })
     wiredLead({ data }) {
         if (data) {
@@ -38,6 +40,7 @@ export default class InvisibleEnrichment extends LightningElement {
 
     async runSync(domain) {
         try {
+            // Refresh Lightning Data Service after Apex changes the backing record.
             await enrichAndSaveAccount({ accountId: this.recordId, websiteDomain: domain });
             await notifyRecordUpdateAvailable([{ recordId: this.recordId }]);
         } catch (error) {

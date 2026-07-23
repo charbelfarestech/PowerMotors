@@ -1,3 +1,4 @@
+<!-- PDF template rendered after an Opportunity transitions to Closed Won. -->
 <apex:page renderAs="pdf" controller="OpportunityClosedWonPDFController" applyHtmlTag="false" showHeader="false">
     <head>
         <style>

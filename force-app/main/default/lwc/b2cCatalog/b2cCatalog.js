@@ -5,6 +5,7 @@ import getOriginValues    from '@salesforce/apex/B2CCatalogController.getOriginV
 import getCategoryValues  from '@salesforce/apex/B2CCatalogController.getCategoryValues';
 import createWonOpportunity from '@salesforce/apex/B2CCatalogController.createWonOpportunity';
 
+// Display-only constants; server data remains numeric until rendered in the UI.
 const PAGE_SIZE = 5;
 const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 const fmt = v => (v != null ? USD.format(v) : '—');
@@ -34,6 +35,7 @@ const DATATABLE_COLUMNS = [
     }
 ];
 
+/** Account-page catalog that retains selections across pages and submits a sale to Apex. */
 export default class B2cCatalog extends LightningElement {
     @api recordId;
 
@@ -95,6 +97,7 @@ export default class B2cCatalog extends LightningElement {
         }));
     }
 
+    // Reactive parameters automatically reload the catalog when either filter changes.
     @wire(getProducts, {
         searchKey:      '',
         categoryFilter: '$selectedCategory',
@@ -145,7 +148,7 @@ export default class B2cCatalog extends LightningElement {
         this.opportunityName = e.target.value; 
     }
 
-    // Safely update master selectedRowIds list across pagination
+    // Merge this page's selection with IDs remembered from the other pages.
     handleRowSelection(event) {
         const selectedRowsOnPage = event.detail.selectedRows;
         const selectedIdsOnPage = new Set(selectedRowsOnPage.map(r => r.pricebookEntryId));
@@ -164,6 +167,7 @@ export default class B2cCatalog extends LightningElement {
 
         if (actionName === 'view_details') {
             const isGen = isGenRT(row.recordTypeName);
+            // Add presentation-only values without mutating the server row.
             this.selectedProductDetail = {
                 ...row,
                 imageUrl: row.imageUrl ? row.imageUrl : PLACEHOLDER_ICON,
@@ -222,6 +226,7 @@ export default class B2cCatalog extends LightningElement {
         }
 
         try {
+            // Convert visible product rows into the Apex SelectedItem contract.
             const items = this.selectedItems.map(i => ({
                 pricebookEntryId: i.pricebookEntryId,
                 unitPrice:        i.unitPrice,

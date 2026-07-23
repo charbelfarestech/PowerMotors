@@ -1,3 +1,4 @@
+/** Imperative Apex endpoint used by the invisible record-page enrichment component. */
 public with sharing class CompanyEnrichmentController {
 
     @AuraEnabled
@@ -15,6 +16,7 @@ public with sharing class CompanyEnrichmentController {
 
             if (records != null && !records.isEmpty()) {
                 Map<String, Object> remoteAcc = (Map<String, Object>) records[0];
+                // A partial sObject limits DML to the fields explicitly assigned below.
                 Account accToUpdate = new Account(Id = accountId);
 
                 // Standard Fields

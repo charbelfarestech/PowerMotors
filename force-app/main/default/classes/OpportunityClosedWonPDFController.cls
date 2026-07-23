@@ -9,9 +9,11 @@
  */
 public with sharing class OpportunityClosedWonPDFController {
 
+    // Read-only model used by OpportunityClosedWonPDF.page.
     public Opportunity opp { get; private set; }
 
     public OpportunityClosedWonPDFController() {
+        // The future email job passes the Opportunity as the page's id URL parameter.
         Id oppId = ApexPages.currentPage().getParameters().get('id');
         if (oppId != null) {
             opp = [

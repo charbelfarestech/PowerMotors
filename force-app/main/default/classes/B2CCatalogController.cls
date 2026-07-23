@@ -1,5 +1,7 @@
+/** Apex API for catalog reads and B2C Opportunity creation. */
 public with sharing class B2CCatalogController {
 
+    // UI DTO: exposes only the catalog fields required by the LWC.
     public class ProductCard {
         @AuraEnabled public Id     pricebookEntryId;
         @AuraEnabled public Id     productId;
@@ -19,6 +21,7 @@ public with sharing class B2CCatalogController {
         @AuraEnabled public String imageUrl;
     }
 
+    // Request DTO received from the LWC when a user saves a sale.
     public class SelectedItem {
     @AuraEnabled public Id      pricebookEntryId { get; set; }
     @AuraEnabled public Decimal unitPrice        { get; set; }
@@ -37,6 +40,7 @@ public with sharing class B2CCatalogController {
     public static List<ProductCard> getProducts(String searchKey, String categoryFilter, String countryFilter) {
         Id pbId = getPricebookId();
 
+        // Dynamic SOQL adds optional filters while keeping their values as bound variables.
         String query =
             'SELECT Id, UnitPrice, ' +
             '  Product2.Id, Product2.Name, Product2.Serial_Number__c, ' +
@@ -141,6 +145,7 @@ public with sharing class B2CCatalogController {
     public static Id createWonOpportunity(Id accountId, String opportunityName, List<SelectedItem> items) {
         Id pbId = getPricebookId();
 
+        // Insert the parent first because each line item needs its Opportunity Id.
         Opportunity opp   = new Opportunity();
         opp.Name          = String.isBlank(opportunityName) ? 'B2C Sale' : opportunityName;
         opp.AccountId     = accountId;
@@ -149,6 +154,7 @@ public with sharing class B2CCatalogController {
         opp.Pricebook2Id  = pbId;
         insert opp;
 
+        // Accumulate rows so all selected items are inserted in one DML operation.
         List<OpportunityLineItem> olis = new List<OpportunityLineItem>();
         for (SelectedItem item : items) {
             Decimal qty = item.quantity == null ? 1 : item.quantity;

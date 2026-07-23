@@ -1,3 +1,4 @@
+/** Opportunity event router; only after-update currently has business behavior. */
 public with sharing class OpportunityTriggerHandler extends TriggerHandler implements ITriggerHandler {
 
     private Map<Id, Opportunity> newMap;
@@ -23,6 +24,7 @@ public with sharing class OpportunityTriggerHandler extends TriggerHandler imple
     public override void afterInsert() {}
     public override void beforeUpdate() {}
     public override void afterUpdate() {
+        // Comparing new and old values lets the email logic detect a real stage transition.
         Ap01_Opportunity_EmailLogic.handleAfterUpdate(TriggerNew, oldMap);
     }
     public override void beforeDelete() {}

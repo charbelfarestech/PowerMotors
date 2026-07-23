@@ -1,3 +1,4 @@
+/** Flow-invocable Quote PDF generation and email service. */
 public without sharing class QuoteAutoEmailService {
 
     @InvocableMethod(label='Create Quote PDF and Email')
@@ -7,6 +8,7 @@ public without sharing class QuoteAutoEmailService {
         }
     }
 
+    // PDF rendering is asynchronous because Salesforce treats it as a callout.
     @future(callout=true)
     public static void createQuotePDF(Id quoteId) {
 
@@ -33,6 +35,7 @@ public without sharing class QuoteAutoEmailService {
 
     public static void sendEmail(Id quoteId, Id quotedocId, Id opportunityId) {
 
+        // Send to every related Opportunity contact that has an email address.
         List<OpportunityContactRole> roles = [
             SELECT ContactId, Contact.Email
             FROM OpportunityContactRole
