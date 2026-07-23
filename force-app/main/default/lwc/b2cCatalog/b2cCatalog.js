@@ -1,4 +1,4 @@
-import { LightningElement, wire, api, track } from 'lwc';
+import { LightningElement, wire, api } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import getProducts        from '@salesforce/apex/B2CCatalogController.getProducts';
 import getOriginValues    from '@salesforce/apex/B2CCatalogController.getOriginValues';
@@ -9,10 +9,30 @@ const PAGE_SIZE = 5;
 const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 const fmt = v => (v != null ? USD.format(v) : '—');
 
-// Inline SVG Icon Data URI to render when DisplayUrl is null/blank
 const PLACEHOLDER_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='80' height='80' fill='%23919EAB'%3E%3Cpath d='M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-5.04-6.71l-2.75 3.54-1.96-2.36L6.5 17h11l-3.54-4.71zM11.5 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z'/%3E%3C/svg%3E";
 
 const isGenRT = rt => rt && rt.toLowerCase().includes('generator');
+
+const DATATABLE_COLUMNS = [
+    { label: 'Product Name', fieldName: 'name', type: 'text' },
+    { label: 'Family', fieldName: 'productFamily', type: 'text' },
+    { label: 'Country of Origin', fieldName: 'countryOfOrigin', type: 'text' },
+    { 
+        label: 'Unit Price', 
+        fieldName: 'unitPrice', 
+        type: 'currency', 
+        typeAttributes: { currencyCode: 'USD' },
+        cellAttributes: { alignment: 'right' } 
+    },
+    {
+        type: 'action',
+        typeAttributes: {
+            rowActions: [
+                { label: 'View Details', name: 'view_details' }
+            ]
+        }
+    }
+];
 
 export default class B2cCatalog extends LightningElement {
     @api recordId;
@@ -25,8 +45,13 @@ export default class B2cCatalog extends LightningElement {
     categoryOptions  = [];
     error;
 
+    columns = DATATABLE_COLUMNS;
     _allProducts = [];
-    @track _rowState = {};
+    selectedRowIds = []; // Master list of selected PricebookEntry IDs
+
+    // Modal state
+    isModalOpen = false;
+    selectedProductDetail = null;
 
     @wire(getOriginValues)
     wiredOrigins({ data }) {
@@ -96,33 +121,13 @@ export default class B2cCatalog extends LightningElement {
 
     get pagedProducts() {
         const start = (this.currentPage - 1) * PAGE_SIZE;
-        return this._allProducts
-            .slice(start, start + PAGE_SIZE)
-            .map(p => {
-                const st       = this._rowState[p.pricebookEntryId] || {};
-                const expanded = !!st.expanded;
-                const selected = !!st.selected;
-                const isGen    = isGenRT(p.recordTypeName);
-                return {
-                    ...p,
-                    // Uses DisplayUrl value from Apex wrapper, or falls back to SVG
-                    imageUrl:       p.imageUrl ? p.imageUrl : PLACEHOLDER_ICON,
-                    isGenerator:    isGen,
-                    isPart:         !isGen,
-                    detailKey:      p.pricebookEntryId + '_d',
-                    rowClass:       'trow' + (selected ? ' trow-selected' : ''),
-                    detailRowClass: 'detail-tr' + (expanded ? ' detail-tr-open' : ''),
-                    nameBtnClass:   'name-btn' + (expanded ? ' name-btn-open' : ''),
-                    chevron:        expanded ? '▼' : '▶',
-                    badgeClass:     'badge ' + (isGen ? 'badge-gen' : 'badge-part'),
-                    selectBtnClass: 'sel-btn' + (selected ? ' sel-btn-active' : ''),
-                    buttonLabel:    selected ? 'Selected ✓' : 'Select',
-                    formattedPrice: fmt(p.unitPrice),
-                    avgLife:        p.averageLifeExpectancy != null ? p.averageLifeExpectancy + ' yrs' : '—',
-                    weightKg:       p.weight != null ? p.weight + ' kg' : '—',
-                    kva:            p.powerGeneratedKva != null ? p.powerGeneratedKva + ' KVA' : '—'
-                };
-            });
+        return this._allProducts.slice(start, start + PAGE_SIZE);
+    }
+
+    // Only pass IDs to lightning-datatable that exist on the CURRENT page
+    get selectedRowsForCurrentPage() {
+        const currentPageIds = new Set(this.pagedProducts.map(p => p.pricebookEntryId));
+        return this.selectedRowIds.filter(id => currentPageIds.has(id));
     }
 
     handleCategoryChange(e) {
@@ -140,21 +145,52 @@ export default class B2cCatalog extends LightningElement {
         this.opportunityName = e.target.value; 
     }
 
-    toggleDetails(e) {
-        const id = e.currentTarget.dataset.id;
-        const st = this._rowState[id] || {};
-        this._rowState = { ...this._rowState, [id]: { ...st, expanded: !st.expanded } };
+    // Safely update master selectedRowIds list across pagination
+    handleRowSelection(event) {
+        const selectedRowsOnPage = event.detail.selectedRows;
+        const selectedIdsOnPage = new Set(selectedRowsOnPage.map(r => r.pricebookEntryId));
+        const currentPageIds = new Set(this.pagedProducts.map(p => p.pricebookEntryId));
+
+        // Preserve selections from OTHER pages
+        const otherPageSelectedIds = this.selectedRowIds.filter(id => !currentPageIds.has(id));
+
+        // Combine other page selections with current page selections
+        this.selectedRowIds = [...otherPageSelectedIds, ...selectedIdsOnPage];
     }
 
-    toggleSelect(e) {
-        const id = e.currentTarget.dataset.id;
-        const st = this._rowState[id] || {};
-        this._rowState = { ...this._rowState, [id]: { ...st, selected: !st.selected } };
+    handleRowAction(event) {
+        const actionName = event.detail.action.name;
+        const row = event.detail.row;
+
+        if (actionName === 'view_details') {
+            const isGen = isGenRT(row.recordTypeName);
+            this.selectedProductDetail = {
+                ...row,
+                imageUrl: row.imageUrl ? row.imageUrl : PLACEHOLDER_ICON,
+                isGenerator: isGen,
+                isPart: !isGen,
+                avgLife: row.averageLifeExpectancy != null ? row.averageLifeExpectancy + ' yrs' : '—',
+                weightKg: row.weight != null ? row.weight + ' kg' : '—',
+                kva: row.powerGeneratedKva != null ? row.powerGeneratedKva + ' KVA' : '—'
+            };
+            this.isModalOpen = true;
+        }
+    }
+
+    closeModal() {
+        this.isModalOpen = false;
+        this.selectedProductDetail = null;
+    }
+
+    removeSelectedItem(e) {
+        const idToRemove = e.currentTarget.dataset.id;
+        this.selectedRowIds = this.selectedRowIds.filter(id => id !== idToRemove);
     }
 
     get selectedItems() {
+        const idSet = new Set(this.selectedRowIds);
         return this._allProducts
-            .filter(p => this._rowState[p.pricebookEntryId]?.selected)
+            .filter(p => idSet.has(p.pricebookEntryId))
             .map(p => ({ ...p, formattedPrice: fmt(p.unitPrice) }));
     }
     
@@ -166,7 +202,16 @@ export default class B2cCatalog extends LightningElement {
         return fmt(this.selectedItems.reduce((s, i) => s + (i.unitPrice || 0), 0));
     }
 
+    get isCreateDisabled() {
+        return !this.hasSelectedItems || !this.opportunityName || !this.opportunityName.trim();
+    }
+
     async createOpportunity() {
+        const inputCmp = this.template.querySelector('.opp-name-input');
+        if (inputCmp && !inputCmp.reportValidity()) {
+            return;
+        }
+
         if (!this.hasSelectedItems) {
             this.dispatchEvent(new ShowToastEvent({
                 title: 'No items selected', 
@@ -175,6 +220,7 @@ export default class B2cCatalog extends LightningElement {
             }));
             return;
         }
+
         try {
             const items = this.selectedItems.map(i => ({
                 pricebookEntryId: i.pricebookEntryId,
@@ -184,7 +230,7 @@ export default class B2cCatalog extends LightningElement {
 
             await createWonOpportunity({
                 accountId:       this.recordId,
-                opportunityName: this.opportunityName || 'B2C Sale',
+                opportunityName: this.opportunityName.trim(),
                 items
             });
 
@@ -194,7 +240,7 @@ export default class B2cCatalog extends LightningElement {
                 variant: 'success'
             }));
             
-            this._rowState = {};
+            this.selectedRowIds = [];
             this.opportunityName = '';
         } catch (err) {
             let msg = 'Failed to create opportunity.';

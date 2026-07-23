@@ -15,7 +15,7 @@ public with sharing class B2CCatalogController {
         @AuraEnabled public Decimal powerGeneratedKva;
         @AuraEnabled public String engineType;
         @AuraEnabled public String productFamily;
-        @AuraEnabled public String recordTypeName; 
+        @AuraEnabled public String recordTypeName;
         @AuraEnabled public String imageUrl;
     }
 

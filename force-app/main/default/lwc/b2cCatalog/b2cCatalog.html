@@ -5,12 +5,11 @@
         <div class="hero">
             <div class="eyebrow">Power Motors</div>
             <h2>B2C Product Catalog</h2>
-            <p>Filter by category and country · Click a product name to expand details · Select items to build your order</p>
+            <p>Filter by category and country · Select items using checkboxes to build your order</p>
         </div>
 
         <!-- Filter bar -->
         <div class="filter-bar slds-p-horizontal_medium slds-p-vertical_small">
-            <!-- Dynamic category pills driven by org picklist -->
             <div class="pill-group">
                 <template for:each={categoryOptions} for:item="cat">
                     <button key={cat.value}
@@ -34,106 +33,20 @@
         <!-- Body: table + sidebar -->
         <div class="body slds-p-horizontal_medium slds-p-bottom_medium">
 
-            <!-- Catalog table -->
+            <!-- Catalog Lightning Datatable -->
             <section class="table-section">
                 <template if:true={hasProducts}>
-                    <table class="ctable">
-                        <thead>
-                            <tr>
-                                <th>Product Name</th>
-                                <th>Family</th>
-                                <th>Country of Origin</th>
-                                <th class="text-right">Unit Price</th>
-                                <th class="text-center">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template for:each={pagedProducts} for:item="p">
-
-                                <!-- product row -->
-                                <tr key={p.pricebookEntryId} class={p.rowClass}>
-                                    <td>
-                                        <button class={p.nameBtnClass}
-                                                data-id={p.pricebookEntryId}
-                                                onclick={toggleDetails}>
-                                            {p.name}
-                                            <span class="chevron">{p.chevron}</span>
-                                        </button>
-                                    </td>
-                                    <td><span class={p.badgeClass}>{p.productFamily}</span></td>
-                                    <td>{p.countryOfOrigin}</td>
-                                    <td class="text-right price-cell">{p.formattedPrice}</td>
-                                    <td class="text-center">
-                                        <button class={p.selectBtnClass}
-                                                data-id={p.pricebookEntryId}
-                                                onclick={toggleSelect}>
-                                            {p.buttonLabel}
-                                        </button>
-                                    </td>
-                                </tr>
-
-                                <!-- inline detail row -->
-                                <tr key={p.detailKey} class={p.detailRowClass}>
-                                    <td colspan="5" class="detail-td">
-                                        <div class="detail-body">
-                                            <!-- Render dynamic product image or SVG fallback -->
-                                            <div class="detail-img">
-                                                <img src={p.imageUrl} alt={p.name} class="product-thumb" />
-                                            </div>
-                                            <dl class="detail-fields">
-
-                                                <!-- Common fields for ALL products -->
-                                                <dt>Serial #</dt>
-                                                <dd>{p.serialNumber}</dd>
-
-                                                <dt>Country of Origin</dt>
-                                                <dd>{p.countryOfOrigin}</dd>
-
-                                                <dt>Avg. Life Expectancy</dt>
-                                                <dd>{p.avgLife}</dd>
-
-                                                <dt>Description</dt>
-                                                <dd class="dd-description">{p.description}</dd>
-
-                                                <!-- Generator-only fields -->
-                                                <template if:true={p.isGenerator}>
-                                                    <dt class="section-sep">Generator Details</dt>
-
-                                                    <dt>Size</dt>
-                                                    <dd>{p.generatorSize}</dd>
-
-                                                    <dt>Weight</dt>
-                                                    <dd>{p.weightKg}</dd>
-
-                                                    <dt>Phase</dt>
-                                                    <dd>{p.phase}</dd>
-
-                                                    <dt>Power (KVA)</dt>
-                                                    <dd>{p.kva}</dd>
-
-                                                    <dt>Engine Type</dt>
-                                                    <dd>{p.engineType}</dd>
-                                                </template>
-
-                                                <!-- Parts-only section label -->
-                                                <template if:true={p.isPart}>
-                                                    <dt class="section-sep">Part Details</dt>
-
-                                                    <dt>Weight</dt>
-                                                    <dd>{p.weightKg}</dd>
-                                                </template>
-
-                                            </dl>
-                                        </div>
-                                    </td>
-                                </tr>
-
-                            </template>
-                        </tbody>
-                    </table>
+                    <lightning-datatable
+                        key-field="pricebookEntryId"
+                        data={pagedProducts}
+                        columns={columns}
+                        selected-rows={selectedRowsForCurrentPage}
+                        onrowselection={handleRowSelection}
+                        onrowaction={handleRowAction}>
+                    </lightning-datatable>
 
                     <!-- Pagination -->
-                    <div class="pager">
+                    <div class="pager slds-m-top_medium">
                         <button class="pager-btn" disabled={isFirstPage} onclick={prevPage}>&#8249;</button>
                         <span class="pager-label">Page {currentPage} of {totalPages}</span>
                         <button class="pager-btn" disabled={isLastPage} onclick={nextPage}>&#8250;</button>
@@ -165,7 +78,7 @@
                                         <span class="sel-price">{item.formattedPrice}</span>
                                         <button class="remove-btn"
                                                 data-id={item.pricebookEntryId}
-                                                onclick={toggleSelect}
+                                                onclick={removeSelectedItem}
                                                 title="Remove">&#10005;</button>
                                     </span>
                                 </li>
@@ -175,16 +88,18 @@
                             <span>Total</span>
                             <span class="total-amount">{formattedTotal}</span>
                         </div>
-                        <div class="opp-input">
+                        <div class="opp-input slds-m-vertical_small">
                             <lightning-input
                                 type="text"
                                 label="Opportunity Name"
                                 value={opportunityName}
                                 placeholder="e.g. John Smith – B2C Sale"
-                                onchange={handleOppNameChange}>
+                                onchange={handleOppNameChange}
+                                required
+                                class="opp-name-input">
                             </lightning-input>
                         </div>
-                        <button class="create-btn" onclick={createOpportunity}>
+                        <button class="create-btn" disabled={isCreateDisabled} onclick={createOpportunity}>
                             Save &amp; Create Won Opportunity
                         </button>
                     </template>
@@ -192,12 +107,70 @@
                     <template if:false={hasSelectedItems}>
                         <div class="summary-empty">
                             <p>No items selected.</p>
-                            <p class="hint">Click <strong>Select</strong> on a product row to add it to your order.</p>
+                            <p class="hint">Check a product row to add it to your order.</p>
                         </div>
                     </template>
                 </div>
             </aside>
         </div>
+
+        <!-- Product Details Modal -->
+        <template if:true={isModalOpen}>
+            <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open slds-modal_small">
+                <div class="slds-modal__container">
+                    <header class="slds-modal__header">
+                        <button class="slds-button slds-button_icon slds-modal__close slds-button_icon-inverse" title="Close" onclick={closeModal}>
+                            &#10005;
+                        </button>
+                        <h2 class="slds-modal__title slds-hyphenate">{selectedProductDetail.name}</h2>
+                    </header>
+                    <div class="slds-modal__content slds-p-around_medium">
+                        <div class="detail-body">
+                            <div class="detail-img slds-m-bottom_small">
+                                <img src={selectedProductDetail.imageUrl} alt={selectedProductDetail.name} class="product-thumb" />
+                            </div>
+                            <dl class="detail-fields">
+                                <dt>Serial #</dt>
+                                <dd>{selectedProductDetail.serialNumber}</dd>
+
+                                <dt>Country of Origin</dt>
+                                <dd>{selectedProductDetail.countryOfOrigin}</dd>
+
+                                <dt>Avg. Life Expectancy</dt>
+                                <dd>{selectedProductDetail.avgLife}</dd>
+
+                                <dt>Description</dt>
+                                <dd class="dd-description">{selectedProductDetail.description}</dd>
+
+                                <template if:true={selectedProductDetail.isGenerator}>
+                                    <dt class="section-sep">Generator Details</dt>
+                                    <dt>Size</dt>
+                                    <dd>{selectedProductDetail.generatorSize}</dd>
+                                    <dt>Weight</dt>
+                                    <dd>{selectedProductDetail.weightKg}</dd>
+                                    <dt>Phase</dt>
+                                    <dd>{selectedProductDetail.phase}</dd>
+                                    <dt>Power (KVA)</dt>
+                                    <dd>{selectedProductDetail.kva}</dd>
+                                    <dt>Engine Type</dt>
+                                    <dd>{selectedProductDetail.engineType}</dd>
+                                </template>
+
+                                <template if:true={selectedProductDetail.isPart}>
+                                    <dt class="section-sep">Part Details</dt>
+                                    <dt>Weight</dt>
+                                    <dd>{selectedProductDetail.weightKg}</dd>
+                                </template>
+                            </dl>
+                        </div>
+                    </div>
+                    <footer class="slds-modal__footer">
+                        <lightning-button label="Close" onclick={closeModal}></lightning-button>
+                    </footer>
+                </div>
+            </section>
+            <div class="slds-backdrop slds-backdrop_open"></div>
+        </template>
 
     </lightning-card>
 </template>
