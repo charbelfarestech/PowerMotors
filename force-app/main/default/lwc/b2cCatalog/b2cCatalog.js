@@ -1,4 +1,5 @@
 import { LightningElement, wire, api } from 'lwc';
+import { NavigationMixin } from 'lightning/navigation';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import getProducts        from '@salesforce/apex/B2CCatalogController.getProducts';
 import getOriginValues    from '@salesforce/apex/B2CCatalogController.getOriginValues';
@@ -36,7 +37,7 @@ const DATATABLE_COLUMNS = [
 ];
 
 /** Account-page catalog that retains selections across pages and submits a sale to Apex. */
-export default class B2cCatalog extends LightningElement {
+export default class B2cCatalog extends NavigationMixin(LightningElement) {
     @api recordId;
 
     selectedCategory = '';
@@ -233,7 +234,8 @@ export default class B2cCatalog extends LightningElement {
                 quantity:         1
             }));
 
-            await createWonOpportunity({
+            // Capture the created Opportunity ID returned by Apex
+            const oppId = await createWonOpportunity({
                 accountId:       this.recordId,
                 opportunityName: this.opportunityName.trim(),
                 items
@@ -247,6 +249,18 @@ export default class B2cCatalog extends LightningElement {
             
             this.selectedRowIds = [];
             this.opportunityName = '';
+
+            // Redirect the user to the newly created Opportunity record page
+            if (oppId) {
+                this[NavigationMixin.Navigate]({
+                    type: 'standard__recordPage',
+                    attributes: {
+                        recordId: oppId,
+                        objectApiName: 'Opportunity',
+                        actionName: 'view'
+                    }
+                });
+            }
         } catch (err) {
             let msg = 'Failed to create opportunity.';
             if (err?.body?.message) {
