@@ -112,22 +112,19 @@ public with sharing class B2CCatalogController {
         return result;
     }
 
-    // ── picklists for filter dropdowns ─────────────────────────────────────
-
-    // Returns the DeveloperNames of active Product2 record types that exist
-    // in the B2C Catalog pricebook — drives the category filter pills in LWC.
     @AuraEnabled(cacheable=true)
     public static List<String> getCategoryValues() {
         List<String> result = new List<String>();
-        for (RecordType rt : [
-            SELECT DeveloperName
-            FROM   RecordType
-            WHERE  SObjectType = 'Product2'
-              AND  IsActive = true
-            ORDER BY DeveloperName
-        ]) {
-            result.add(rt.DeveloperName);
+
+        // Retrieve record type metadata directly from the Product2 schema
+        for (Schema.RecordTypeInfo rti : Schema.SObjectType.Product2.getRecordTypeInfos()) {
+            if (rti.isActive() && !rti.isMaster()) {
+                result.add(rti.getDeveloperName());
+            }
         }
+
+        // Sort alphabetically
+        result.sort();
         return result;
     }
 
@@ -156,8 +153,9 @@ public with sharing class B2CCatalogController {
 
         // Accumulate rows so all selected items are inserted in one DML operation.
         List<OpportunityLineItem> olis = new List<OpportunityLineItem>();
+        Decimal qty;
         for (SelectedItem item : items) {
-            Decimal qty = item.quantity == null ? 1 : item.quantity;
+            qty = item.quantity == null ? 1 : item.quantity;
             System.debug ('Creating OpportunityLineItem1: ' + item);
             System.debug ('Creating OpportunityLineItem: ' + item.pricebookEntryId + ', qty=' + qty + ', unitPrice=' + item.unitPrice);
             olis.add(new OpportunityLineItem(

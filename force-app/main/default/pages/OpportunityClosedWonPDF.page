@@ -134,8 +134,7 @@
         <table class="line-items-table">
             <thead>
                 <tr>
-                    <th style="width: 40%;">Product / Description</th>
-                    <th class="text-right" style="width: 15%;">List Price</th>
+                    <th style="width: 40%;">Product / Description</th>                
                     <th class="text-right" style="width: 15%;">Sales Price</th>
                     <th class="text-center" style="width: 10%;">Quantity</th>
                     <th class="text-right" style="width: 20%;">Total Price</th>
@@ -144,11 +143,6 @@
             <tbody>
                 <tr>
                     <td><apex:outputText value="{!opp.Description}"/></td>
-                    <td class="text-right">
-                        <apex:outputText value="{0, number, $#,##0.00}">
-                            <apex:param value="{!opp.Amount}" />
-                        </apex:outputText>
-                    </td>
                     <td class="text-right">
                         <apex:outputText value="{0, number, $#,##0.00}">
                             <apex:param value="{!opp.Amount}" />

@@ -129,51 +129,7 @@
 .sel-btn-active:hover { background: #0558a8; border-color: #0558a8; }
 
 /* ── Inline detail row ─────────────────────────────────────────────────── */
-.detail-tr     { display: none; }
-.detail-tr-open { display: table-row; }
-.detail-td     { padding: 0 !important; border-bottom: 2px solid #cfe2ff !important; }
-.detail-body {
-    display: flex;
-    gap: 1.25rem;
-    padding: 1rem 1.25rem;
-    background: linear-gradient(100deg, #f8fbff, #f0f7ff);
-    animation: slideDown .2s ease;
-}
-@keyframes slideDown {
-    from { opacity: 0; transform: translateY(-6px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-.detail-img {
-    flex: 0 0 80px;
-    height: 80px;
-    background: #e8f3ff;
-    border-radius: .75rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid #cfe2ff;
-}
-.detail-fields {
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: .25rem .75rem;
-    font-size: .82rem;
-    margin: 0;
-    align-content: start;
-}
-.detail-fields dt { color: #54698d; font-weight: 600; white-space: nowrap; }
-.detail-fields dd { color: #032d60; margin: 0; }
-.section-sep {
-    grid-column: 1 / -1;
-    margin-top: .5rem;
-    padding-top: .35rem;
-    border-top: 1px solid #cfe2ff;
-    color: #0176d3;
-    font-size: .78rem;
-    text-transform: uppercase;
-    letter-spacing: .06em;
-}
-.dd-description { color: #54698d; font-style: italic; }
+
 
 /* ── Pagination ─────────────────────────────────────────────────────────── */
 .pager {
